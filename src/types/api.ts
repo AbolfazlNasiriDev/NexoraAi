@@ -14,6 +14,7 @@ export type ApiErrorCode =
   | "PROVIDER_NOT_CONFIGURED"
   | "RATE_LIMITED"
   | "UNAUTHORIZED"
+  | "PAYLOAD_TOO_LARGE"
   | "INTERNAL_ERROR";
 
 /** The error object inside a failure envelope. */

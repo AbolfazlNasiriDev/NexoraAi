@@ -29,7 +29,9 @@ import type { ModelInfo, ModelStatus, ProviderId } from "@/types/ai";
 
 /** One model a provider *would* serve once configured. These are candidate
  * identifiers only — a candidate is NOT an available model until its
- * provider has a real API key (see `getModels()` below). */
+ * provider is both configured (real API key) AND implemented (real SDK
+ * call); a key alone reports `not_implemented` (see `modelStatus()`
+ * below). */
 export interface CandidateModel {
   id: string;
   name: string;
@@ -42,6 +44,12 @@ export abstract class BaseProvider implements AIProvider {
   readonly displayName: string;
   readonly capabilities: ProviderCapabilities;
   protected readonly candidates: CandidateModel[];
+  /**
+   * True only when `chat()` / `chatStream()` are real SDK calls.
+   * Stays `false` for the Phase 2.2 stubs; a real provider
+   * implementation sets it to `true` (or overrides `isImplemented()`).
+   */
+  protected readonly implemented: boolean = false;
 
   protected constructor(
     id: ProviderId,
@@ -61,12 +69,24 @@ export abstract class BaseProvider implements AIProvider {
   }
 
   /**
-   * Live status for this provider's models, derived from real config:
-   * a real key present -> "available", otherwise -> "not_configured".
+   * True only when `chat()` / `chatStream()` are real SDK calls, not
+   * stubs. The stubs inherit `implemented = false`.
+   */
+  isImplemented(): boolean {
+    return this.implemented;
+  }
+
+  /**
+   * Live status for this provider's models, derived from real config
+   * AND real implementation (Phase 2.10):
+   * - no key -> "not_configured"
+   * - key set, still a stub -> "not_implemented" (never "available")
+   * - key set and implemented -> "available"
    * Nothing is ever hardcoded to "available".
    */
   protected modelStatus(): ModelStatus {
-    return this.isConfigured() ? "available" : "not_configured";
+    if (!this.isConfigured()) return "not_configured";
+    return this.isImplemented() ? "available" : "not_implemented";
   }
 
   /** Candidate models with their live status attached. */

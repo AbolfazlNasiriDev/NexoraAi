@@ -203,6 +203,11 @@ export function ModelSelector({ value, onChange, onModelsLoaded }: ModelSelector
                             Available
                           </span>
                         )}
+                        {model.status === "not_implemented" && (
+                          <span className="rounded-full bg-[#F3E8FF] px-2 py-0.5 text-[9px] font-bold tracking-wide text-[#7E22CE] uppercase">
+                            Not implemented
+                          </span>
+                        )}
                         {model.status === "disabled" && (
                           <span className="rounded-full bg-[#F1F5F9] px-2 py-0.5 text-[9px] font-bold tracking-wide text-[#475569] uppercase">
                             Disabled

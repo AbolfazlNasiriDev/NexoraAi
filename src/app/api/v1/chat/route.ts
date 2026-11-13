@@ -2,6 +2,8 @@
  * POST /api/v1/chat — chat completion endpoint (Phase 2.3).
  *
  * Flow:
+ * 0. Read the body with a 1 MB size cap (`readLimitedBodyText`) —
+ *    oversize -> 413 PAYLOAD_TOO_LARGE, before any JSON parsing.
  * 1. Parse the JSON body safely (malformed JSON -> 400 VALIDATION_ERROR).
  * 2. Validate strictly with `validateChatRequest` (roles, sizes, counts,
  *    last message must be the user's turn) -> 400 on any violation.
@@ -26,14 +28,28 @@
 
 import { aiGateway } from "@/lib/ai/gateway";
 import { validateChatRequest } from "@/lib/validation/chat.schema";
-import { validationError } from "@/lib/server/errors";
+import { ApiError, validationError } from "@/lib/server/errors";
+import { readLimitedBodyText } from "@/lib/server/request-body";
 import { ok, withErrorHandling } from "@/lib/server/response";
 import type { ChatResponseData } from "@/types/chat";
 
 export const POST = withErrorHandling(async (req: Request) => {
+  // Size-capped read first (1 MB): oversize -> 413 PAYLOAD_TOO_LARGE.
+  // Any other read failure (aborted/truncated stream) is treated like
+  // an unreadable body -> the standard 400 below.
+  let text: string;
+  try {
+    text = await readLimitedBodyText(req);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw validationError("Request body must be valid JSON.", {
+      field: "body",
+    });
+  }
+
   let body: unknown;
   try {
-    body = await req.json();
+    body = JSON.parse(text);
   } catch {
     throw validationError("Request body must be valid JSON.", {
       field: "body",

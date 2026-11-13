@@ -34,6 +34,9 @@ yarn-error.log*
 # ignored: it is a template with empty values and is safe to commit.
 .env
 .env.local
+.env.development
+.env.production
+.env.test
 .env.*.local
 
 # vercel

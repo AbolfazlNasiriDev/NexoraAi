@@ -6,7 +6,7 @@ not covered yet.
 ## Commands
 
 ```bash
-npm test        # Unit suite (Vitest, `vitest run`) — 48 tests, ~2 s
+npm test        # Unit suite (Vitest, `vitest run`) — 76 tests, ~4 s
 npm run build   # Production build (Next.js, includes TypeScript)
 npm run lint    # ESLint
 ```
@@ -25,7 +25,12 @@ AI replies. `NODE_ENV=test` inside the suite.
 | Test file | Tests | Covers |
 | --- | --- | --- |
 | `src/lib/validation/chat.schema.test.ts` | 15 | Chat validation rules from Phase 2.3: valid request, empty / 51 messages, >8000-char message, bad role, last message not user, no user message, missing modelId, unknown top-level and message fields, malformed types, non-object body, whitespace-only content, conversationId rules. Error messages never echo user content. |
-| `src/lib/server/errors.test.ts` | 8 | Error factories (503 `PROVIDER_NOT_CONFIGURED` with the exact message, 400/404/429/500), the failure envelope, and the rule that unknown errors map to a generic 500 without leaking internals. Also `ok()` / `fail()` / `withErrorHandling()`. |
+| `src/lib/server/errors.test.ts` | 12 | Error factories (503 `PROVIDER_NOT_CONFIGURED` with the exact message, 400/404/429/500, 413 `PAYLOAD_TOO_LARGE`), the failure envelope, and the rule that unknown errors map to a generic 500 without leaking internals. Also `ok()` / `fail()` / `withErrorHandling()`. Since Phase 2.10: safe server logging — `ApiError` logs only code + status, unknown errors log only the constructor name; a planted fake key / user content appears in neither the log nor the response. |
+| `src/lib/ai/registry.status.test.ts` | 5 | Model status derivation (Phase 2.10): dummy key → `not_implemented` (never `available`), `listAvailableModels()` stays `[]` with keys set, `isImplemented()` false for the stubs, and a test double with `implemented = true` is the only way to `available` (its `chat()` throws if called — no fake reply). |
+| `src/lib/server/request-body.test.ts` | 6 | Size-capped body reading (Phase 2.10): small/empty/exactly-1 MB bodies read unchanged, `Content-Length` above the limit short-circuits to 413, a streamed body without `Content-Length` is capped and stops reading early, a lying `Content-Length` is still caught by the stream cap. |
+| `src/app/api/v1/chat/route.test.ts` | 4 | Body limit at the route (Phase 2.10): small valid request → 503 (passed the size check), body over 1 MB → 413 `PAYLOAD_TOO_LARGE` in the standard envelope, >1 MB streamed body without `Content-Length` → 413, malformed JSON under the limit → 400. |
+| `src/lib/api/history.test.ts` | 6 | History windowing (Phase 2.10): under-cap unchanged, over-cap capped at 20 in order, last user message always kept (even when older than the window), empty input, custom cap. |
+| `src/lib/server/gitignore.test.ts` | 3 | `.gitignore` env coverage (Phase 2.10): all six env files protected, `.env.example` not ignored (no blanket rule), and the matcher is proven non-vacuous (`.env.local` IS ignored). |
 | `src/lib/server/env.test.ts` | 4 | Env defaults with nothing set (public defaults, no provider configured, `REQUIRED_ENV_VARS` empty, all six optional vars missing), and with vars stubbed (provider + Supabase detection, Supabase needs BOTH URL and anon key, `validateEnv()` never returns a secret value — the only "key" used is the literal fake string `sk-test-only-fake-value`). |
 | `src/lib/ai/registry.test.ts` | 6 | Six candidate models, all `not_configured`, zero available, no "Nexora 1.0" label as a real model, known/unknown model lookup, provider statuses. |
 | `src/lib/ai/gateway.test.ts` | 5 | Unknown model → 400, missing modelId → 400, empty messages → 400, known model → 503 (never a reply), streaming fails eagerly with 503 before any chunk. |
@@ -56,8 +61,12 @@ plain `vi.mock("server-only")` stub was deliberately NOT used.
 
 One expected console line: the "unknown error → generic 500" test
 deliberately passes an error into `toErrorResponse`, which logs it
-server-side by design (`[nexora-api] Unhandled error:`). That line in
-the test output is the feature working, not a failure.
+server-side by design — since Phase 2.10 only the constructor name
+(`[nexora-api] Unhandled error: Error`), never the message or stack.
+That line in the test output is the feature working, not a failure.
+Likewise, every `ApiError` now logs one safe line with only its code
+and status (`[nexora-api] ApiError: VALIDATION_ERROR 400`); the
+route tests therefore print several such lines, which is expected.
 
 ## Live endpoint checks (Part B of Phase 2.8)
 

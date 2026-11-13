@@ -40,6 +40,14 @@ export interface AIProvider {
   isConfigured(): boolean;
 
   /**
+   * True only when `chat()` / `chatStream()` are real SDK calls, not
+   * stubs. A provider can be configured (key set) while still
+   * unimplemented — in that state its models report `not_implemented`,
+   * never `available`.
+   */
+  isImplemented(): boolean;
+
+  /**
    * The models this provider would serve once configured, with their live
    * status derived from configuration. Returns an empty list only if the
    * provider declares no candidate models at all — never invents models.

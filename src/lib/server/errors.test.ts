@@ -5,12 +5,13 @@
  * on — including the honest 503 message and the rule that unknown
  * errors never leak their internals to the client.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiError,
   internalError,
   notFoundError,
+  payloadTooLargeError,
   providerNotConfiguredError,
   rateLimitedError,
   toErrorResponse,
@@ -34,6 +35,14 @@ describe("ApiError factories", () => {
     expect(error.status).toBe(400);
     expect(error.code).toBe("VALIDATION_ERROR");
     expect(error.details).toEqual({ field: "modelId" });
+  });
+
+  it("payloadTooLargeError is 413 with the standard message", () => {
+    const error = payloadTooLargeError();
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(413);
+    expect(error.code).toBe("PAYLOAD_TOO_LARGE");
+    expect(error.message).toBe("Request body is too large.");
   });
 
   it("notFoundError is 404, rateLimitedError is 429, internalError is 500", () => {
@@ -78,6 +87,67 @@ describe("toErrorResponse", () => {
       },
     });
     expect(JSON.stringify(body)).not.toContain("hunter2");
+  });
+});
+
+describe("toErrorResponse safe logging (Phase 2.10)", () => {
+  const SENSITIVE = "sk-test-secret-123";
+  const USER_CONTENT = "alice@example.com";
+  let logs: string[];
+  let spy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    logs = [];
+    spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map((arg) => String(arg)).join(" "));
+    });
+  });
+
+  afterEach(() => {
+    spy.mockRestore();
+  });
+
+  it("logs only the error code + status for ApiError, never the message", () => {
+    const res = toErrorResponse(
+      validationError(`Unknown model: ${SENSITIVE}.`, { field: "modelId" }),
+    );
+    expect(res.status).toBe(400);
+    const logged = logs.join("\n");
+    expect(logged).not.toContain(SENSITIVE);
+    expect(logged).not.toContain("Unknown model");
+    expect(logged).toContain("VALIDATION_ERROR");
+    expect(logged).toContain("400");
+  });
+
+  it("logs only the constructor name for unknown errors — no message, no secret, no user content", async () => {
+    const err = new Error(
+      `provider failed with key ${SENSITIVE} for user ${USER_CONTENT}`,
+    );
+    const res = toErrorResponse(err);
+    expect(res.status).toBe(500);
+
+    // The client response is the generic 500 — nothing leaks there.
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toContain(SENSITIVE);
+    expect(JSON.stringify(body)).not.toContain(USER_CONTENT);
+
+    // And the server log holds only the constructor name.
+    const logged = logs.join("\n");
+    expect(logged).not.toContain(SENSITIVE);
+    expect(logged).not.toContain(USER_CONTENT);
+    expect(logged).not.toContain("provider failed");
+    expect(logged).toContain("Error");
+  });
+
+  it("keeps the generic client message for unknown errors", async () => {
+    const body = await toErrorResponse(new Error("boom")).json();
+    expect(body).toEqual({
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "An unexpected error occurred. Please try again later.",
+      },
+    });
   });
 });
 

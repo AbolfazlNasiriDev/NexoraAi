@@ -61,6 +61,13 @@ export function rateLimitedError(
   return new ApiError(429, "RATE_LIMITED", message);
 }
 
+/** 413 — request body exceeds the allowed size (Phase 2.10). */
+export function payloadTooLargeError(
+  message = "Request body is too large.",
+): ApiError {
+  return new ApiError(413, "PAYLOAD_TOO_LARGE", message);
+}
+
 /** 500 — unexpected failure. The public message stays generic on purpose. */
 export function internalError(): ApiError {
   return new ApiError(
@@ -72,11 +79,18 @@ export function internalError(): ApiError {
 
 /**
  * Convert any thrown value into a safe JSON error response in the standard
- * envelope shape. Unknown errors are logged server-side (message only —
- * never secrets) and mapped to a generic 500.
+ * envelope shape. Unknown errors are logged server-side with safe
+ * metadata only (see below) and mapped to a generic 500.
  */
 export function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof ApiError) {
+    // Log safe metadata only: code + status. Never the message — an
+    // ApiError message can echo user input (e.g. an unknown modelId).
+    console.error(
+      "[nexora-api] ApiError:",
+      error.code,
+      error.status,
+    );
     const body: ApiErrorBody = {
       code: error.code,
       message: error.message,
@@ -88,8 +102,18 @@ export function toErrorResponse(error: unknown): NextResponse {
     );
   }
 
-  // Unknown error: log for the server operator, hide details from clients.
-  console.error("[nexora-api] Unhandled error:", error);
+  // Unknown error: log ONLY the error's constructor name for the server
+  // operator. Never the message, stack, request body, headers, or any
+  // user content — those can embed secrets (e.g. SDK config) once
+  // real provider SDKs exist. The client still gets the generic 500.
+  const errorName =
+    error !== null && typeof error === "object"
+      ? (error as { constructor?: { name?: unknown } }).constructor?.name
+      : typeof error;
+  console.error(
+    "[nexora-api] Unhandled error:",
+    typeof errorName === "string" && errorName !== "" ? errorName : "unknown",
+  );
   const fallback = internalError();
   return NextResponse.json(
     {

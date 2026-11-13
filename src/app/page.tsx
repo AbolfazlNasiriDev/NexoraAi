@@ -14,6 +14,7 @@ import {
   isProviderNotConfiguredError,
   sendChatMessage,
 } from "@/lib/api/chat-client";
+import { selectRecentMessages } from "@/lib/api/history";
 import type { ModelInfo } from "@/types/ai";
 import type { Conversation, UiMessage } from "@/types/conversation";
 import { Badge } from "@/components/ui/badge";
@@ -133,14 +134,18 @@ export default function Home() {
         kind: "loading",
         content: "",
       };
-      const apiMessages = [...messages, userMessage]
-        .filter((m) => m.kind === "user" || m.kind === "assistant")
-        .map((m) => ({
-          role: (m.kind === "assistant" ? "assistant" : "user") as
-            | "assistant"
-            | "user",
-          content: m.content,
-        }));
+      // Cap the API payload at the last 20 turns (Phase 2.10) — the
+      // displayed thread is untouched, only what is sent is windowed.
+      const apiMessages = selectRecentMessages(
+        [...messages, userMessage]
+          .filter((m) => m.kind === "user" || m.kind === "assistant")
+          .map((m) => ({
+            role: (m.kind === "assistant" ? "assistant" : "user") as
+              | "assistant"
+              | "user",
+            content: m.content,
+          })),
+      );
       setConversation((prev) => ({
         ...prev,
         messages: [...prev.messages, userMessage, loadingMessage],

@@ -13,14 +13,24 @@ export type ProviderId = "openai" | "gemini" | "anthropic";
 
 /**
  * Honest status of a model in the registry.
- * - `available`: its provider has a real connection configured.
+ * - `available`: its provider is configured AND its `chat()` /
+ *   `chatStream()` are really implemented (a real SDK call). This is
+ *   the ONLY status under which a model may be used.
  * - `not_configured`: no API key (or other real connection) is set up.
+ * - `not_implemented`: a key IS set, but the provider's `chat()` /
+ *   `chatStream()` are still stubs. The model must NOT be advertised
+ *   as usable — a key alone never makes a model available.
  * - `disabled`: the model is known but deliberately switched off.
  *
- * Status is always DERIVED from live configuration (see
- * `src/lib/ai/registry.ts`). It is never hardcoded to `available`.
+ * Status is always DERIVED from live configuration + implementation
+ * (see `src/lib/ai/providers/base.ts`). It is never hardcoded to
+ * `available`.
  */
-export type ModelStatus = "available" | "not_configured" | "disabled";
+export type ModelStatus =
+  | "available"
+  | "not_configured"
+  | "not_implemented"
+  | "disabled";
 
 /**
  * One model as the rest of the app sees it.

@@ -6,11 +6,13 @@
  * and nothing else — adding a provider means adding it to the
  * `ALL_PROVIDERS` list below, nothing else changes.
  *
- * Status derivation (the honesty rule):
- * every `ModelInfo.status` is computed live from `isProviderConfigured()`
- * — a real API key present -> "available", otherwise -> "not_configured".
- * Statuses are NEVER hardcoded. Today no key is set, so every model
- * reports "not_configured" and `listAvailableModels()` correctly returns [].
+ * Status derivation (the honesty rule, Phase 2.10):
+ * every `ModelInfo.status` is computed live from configuration AND
+ * implementation — a real API key present and a real SDK call
+ * implemented -> "available"; a key present but the provider still a
+ * stub -> "not_implemented"; no key -> "not_configured". Statuses are
+ * NEVER hardcoded. Today no key is set, so every model reports
+ * "not_configured" and `listAvailableModels()` correctly returns [].
  *
  * The Phase 1 display labels "Nexora 1.0 Pro", "Nexora 1.0" and
  * "Nexora Lite" are UI labels only and deliberately do NOT appear here —
@@ -57,15 +59,21 @@ export class ModelRegistry {
   }
 
   /**
-   * Only models whose provider has a real connection configured.
+   * Only models whose provider is configured AND implemented.
    * Returns [] today — nothing is configured, and that empty result is
-   * correct, not a bug.
+   * correct, not a bug. A `not_implemented` model is never listed here.
    */
   listAvailableModels(): ModelInfo[] {
     return this.listModels().filter((model) => model.status === "available");
   }
 
-  /** Live status of every provider, derived from real configuration. */
+  /**
+   * Live status of every provider, derived from real configuration.
+   * NOTE: provider status is key-based only ("configured" = a key is
+   * present) and is NOT the same as model availability — a configured
+   * provider whose `chat()` is still a stub reports its models as
+   * `not_implemented`, not `available`.
+   */
   getProviderStatus(): Record<ProviderId, ProviderStatus> {
     return {
       openai: isProviderConfigured("openai")

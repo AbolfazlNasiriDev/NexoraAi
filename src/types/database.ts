@@ -2,7 +2,10 @@
  * Database row types (Phase 2.6).
  *
  * TypeScript mirrors of the tables created by
- * `supabase/migrations/20261113000000_nexora_phase2_init.sql`.
+ * `supabase/migrations/20261113000000_nexora_phase2_init.sql` and
+ * later migrations (`..._hardening.sql` in 2.11,
+ * `..._profile_email_nullable.sql` in 2.11.2 — `ProfileRow.email`
+ * is nullable since v3).
  *
  * - Types ONLY: there is no database client in this project yet, no
  *   connection is opened, and nothing here talks to Supabase. The types
@@ -20,10 +23,14 @@ import type { ChatRole } from "@/types/chat";
 /**
  * `public.profiles` — one row per authenticated user.
  * `id` is the Supabase Auth user id (`auth.users.id`).
+ * `email` is nullable since Phase 2.11.2 (v3 migration): a phone-only
+ * signup (or an OAuth provider that returns no email) has no email
+ * to store. The UNIQUE constraint still applies to real emails —
+ * PostgreSQL allows multiple NULLs under UNIQUE.
  */
 export interface ProfileRow {
   id: string;
-  email: string;
+  email: string | null;
   display_name: string | null;
   avatar_url: string | null;
   created_at: string;

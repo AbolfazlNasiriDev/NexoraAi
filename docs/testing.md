@@ -6,7 +6,7 @@ not covered yet.
 ## Commands
 
 ```bash
-npm test        # Unit suite (Vitest, `vitest run`) — 76 tests, ~4 s
+npm test        # Unit suite (Vitest, `vitest run`) — 106 tests, ~4 s
 npm run build   # Production build (Next.js, includes TypeScript)
 npm run lint    # ESLint
 ```
@@ -31,6 +31,7 @@ AI replies. `NODE_ENV=test` inside the suite.
 | `src/app/api/v1/chat/route.test.ts` | 4 | Body limit at the route (Phase 2.10): small valid request → 503 (passed the size check), body over 1 MB → 413 `PAYLOAD_TOO_LARGE` in the standard envelope, >1 MB streamed body without `Content-Length` → 413, malformed JSON under the limit → 400. |
 | `src/lib/api/history.test.ts` | 6 | History windowing (Phase 2.10): under-cap unchanged, over-cap capped at 20 in order, last user message always kept (even when older than the window), empty input, custom cap. |
 | `src/lib/server/gitignore.test.ts` | 3 | `.gitignore` env coverage (Phase 2.10): all six env files protected, `.env.example` not ignored (no blanket rule), and the matcher is proven non-vacuous (`.env.local` IS ignored). |
+| `src/lib/server/migration.test.ts` | 30 | Migration structure (Phase 2.11): v1 has 5 tables / 7 indexes / 7 policies / RLS on all 5 / zero GRANTs / no profile-creation path; v2 has the exact least-privilege GRANT matrix (nothing to `anon`/`PUBLIC`, never `GRANT ALL`), the `handle_new_user` trigger (`SECURITY DEFINER`, empty `search_path`, `ON CONFLICT DO NOTHING`, warning guard), the three new `messages` CHECKs, no profiles INSERT policy (deliberate), and idempotency markers. Phase 2.11.2 adds 9 v3 tests: `profiles.email` DROP NOT NULL (UNIQUE kept), the trigger guard is log-and-re-raise (bare `RAISE;` after the WARNING), the v2 trigger is NOT recreated, no table GRANTs/REVOKEs or policies in v3, exactly one `REVOKE EXECUTE` on the function, idempotency markers, and the `docs/database.md` sync (nullable email + log-and-re-raise). **Structural only** — see the limits below. |
 | `src/lib/server/env.test.ts` | 4 | Env defaults with nothing set (public defaults, no provider configured, `REQUIRED_ENV_VARS` empty, all six optional vars missing), and with vars stubbed (provider + Supabase detection, Supabase needs BOTH URL and anon key, `validateEnv()` never returns a secret value — the only "key" used is the literal fake string `sk-test-only-fake-value`). |
 | `src/lib/ai/registry.test.ts` | 6 | Six candidate models, all `not_configured`, zero available, no "Nexora 1.0" label as a real model, known/unknown model lookup, provider statuses. |
 | `src/lib/ai/gateway.test.ts` | 5 | Unknown model → 400, missing modelId → 400, empty messages → 400, known model → 503 (never a reply), streaming fails eagerly with 503 before any chunk. |
@@ -97,9 +98,17 @@ every phase and its results recorded in the phase report:
 - **No live provider tests.** No API key exists, so no test ever calls
   OpenAI, Gemini, or Anthropic. The suite pins the *unconfigured*
   behaviour (503, `not_configured`, empty available list) instead.
-- **The SQL migration was never executed.** `supabase/migrations/…`
-  was verified structurally only (Phase 2.6); no Supabase project or
-  local Postgres exists, so no test applies it.
+- **The SQL migrations were never executed.** `supabase/migrations/…`
+  were verified structurally (Phase 2.6 for v1; Phase 2.11 adds
+  structural tests for v2; Phase 2.11.2 adds 9 more for v3 — the
+  files say what they should say). Syntax IS validated: in Phase
+  2.11.1 the SQL of v1+v2 and their PL/pgSQL bodies were parsed with
+  pglast v8.8 (libpg_query, the real PostgreSQL parser) in `/tmp`,
+  and the same check was re-run for v3. No Supabase project or local
+  Postgres server exists, so the trigger firing, RLS behaviour under
+  a real `auth.uid()`, GRANT effectiveness, and the CHECKs against
+  real rows are all still untested. First live run must be a
+  throwaway Supabase project — see `docs/database.md`.
 - **No E2E / browser tests yet.** No Playwright or Cypress. The UI is
   checked by the live homepage request (200 + no secrets in SSR HTML)
   and by manual preview; interaction tests are a later phase.

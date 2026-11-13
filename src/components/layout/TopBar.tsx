@@ -2,6 +2,7 @@
 
 import { Menu, Download, SlidersHorizontal } from "lucide-react";
 import { ModelSelector } from "@/components/home/ModelSelector";
+import { UserChip } from "@/components/auth/UserChip";
 import type { ModelInfo } from "@/types/ai";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export function TopBar({ model, onModelChange, onOpenSidebar, onModelsLoaded }: 
         </Badge>
 
         <div className="ml-auto flex items-center gap-2">
+          <UserChip />
           <Button variant="outline" size="md" className="hidden sm:inline-flex">
             <SlidersHorizontal className="h-4 w-4" />
             Configuration

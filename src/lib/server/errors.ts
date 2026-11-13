@@ -38,6 +38,13 @@ export function validationError(
   return new ApiError(400, "VALIDATION_ERROR", message, details);
 }
 
+/** 401 — authentication is required (Phase 3.1). */
+export function unauthorizedError(
+  message = "Authentication is required.",
+): ApiError {
+  return new ApiError(401, "UNAUTHORIZED", message);
+}
+
 /** 404 — the requested resource or route does not exist. */
 export function notFoundError(message = "Resource not found"): ApiError {
   return new ApiError(404, "NOT_FOUND", message);

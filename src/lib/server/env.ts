@@ -101,10 +101,12 @@ export function providerEnvVar(provider: ProviderId): string {
 // module, on the server. Never put a secret in a `NEXT_PUBLIC_`
 // variable, never log it, never return it from an API, and never send
 // it to the client. Only booleans ("is it configured?") leave this
-// module. (`SUPABASE_ANON_KEY` is the one exception by design: it is a
-// publishable key meant for the browser, but it is still read
-// server-side here and only handed to a client when a Supabase client
-// is created in a later phase.)
+// module. (`NEXT_PUBLIC_SUPABASE_ANON_KEY` is the one exception by
+// design: it is a publishable key meant for the browser, and the
+// Supabase clients read it directly — server-side in
+// `src/lib/supabase/server.ts` and browser-side in
+// `src/lib/supabase/client.ts` — because the value is public by
+// design, not a secret.)
 
 /** Variables the server cannot run without. Today: none (see above). */
 export const REQUIRED_ENV_VARS: readonly string[] = [];
@@ -114,8 +116,8 @@ export const OPTIONAL_ENV_VARS: readonly string[] = [
   "OPENAI_API_KEY",
   "GEMINI_API_KEY",
   "ANTHROPIC_API_KEY",
-  "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
 ];
 
@@ -150,11 +152,14 @@ export function validateEnv(): EnvValidation {
 /**
  * True only when Supabase can be used: both the project URL and the
  * anon key are set. Today always false — no Supabase project exists
- * yet (Phase 2.6 prepared the schema only).
+ * yet (Phase 2.6 prepared the schema only). Since Phase 3.1.1 this
+ * checks the single shared pair `NEXT_PUBLIC_SUPABASE_URL` /
+ * `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the same pair the browser and
+ * server clients read).
  */
 export function isSupabaseConfigured(): boolean {
   return (
-    hasValue(process.env.SUPABASE_URL) &&
-    hasValue(process.env.SUPABASE_ANON_KEY)
+    hasValue(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+    hasValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   );
 }

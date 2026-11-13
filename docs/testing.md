@@ -6,7 +6,7 @@ not covered yet.
 ## Commands
 
 ```bash
-npm test        # Unit suite (Vitest, `vitest run`) — 106 tests, ~4 s
+npm test        # Unit suite (Vitest, `vitest run`) — 158 tests, ~8 s
 npm run build   # Production build (Next.js, includes TypeScript)
 npm run lint    # ESLint
 ```
@@ -32,7 +32,15 @@ AI replies. `NODE_ENV=test` inside the suite.
 | `src/lib/api/history.test.ts` | 6 | History windowing (Phase 2.10): under-cap unchanged, over-cap capped at 20 in order, last user message always kept (even when older than the window), empty input, custom cap. |
 | `src/lib/server/gitignore.test.ts` | 3 | `.gitignore` env coverage (Phase 2.10): all six env files protected, `.env.example` not ignored (no blanket rule), and the matcher is proven non-vacuous (`.env.local` IS ignored). |
 | `src/lib/server/migration.test.ts` | 30 | Migration structure (Phase 2.11): v1 has 5 tables / 7 indexes / 7 policies / RLS on all 5 / zero GRANTs / no profile-creation path; v2 has the exact least-privilege GRANT matrix (nothing to `anon`/`PUBLIC`, never `GRANT ALL`), the `handle_new_user` trigger (`SECURITY DEFINER`, empty `search_path`, `ON CONFLICT DO NOTHING`, warning guard), the three new `messages` CHECKs, no profiles INSERT policy (deliberate), and idempotency markers. Phase 2.11.2 adds 9 v3 tests: `profiles.email` DROP NOT NULL (UNIQUE kept), the trigger guard is log-and-re-raise (bare `RAISE;` after the WARNING), the v2 trigger is NOT recreated, no table GRANTs/REVOKEs or policies in v3, exactly one `REVOKE EXECUTE` on the function, idempotency markers, and the `docs/database.md` sync (nullable email + log-and-re-raise). **Structural only** — see the limits below. |
-| `src/lib/server/env.test.ts` | 4 | Env defaults with nothing set (public defaults, no provider configured, `REQUIRED_ENV_VARS` empty, all six optional vars missing), and with vars stubbed (provider + Supabase detection, Supabase needs BOTH URL and anon key, `validateEnv()` never returns a secret value — the only "key" used is the literal fake string `sk-test-only-fake-value`). |
+| `src/lib/server/env.test.ts` | 4 | Env defaults with nothing set (public defaults, no provider configured, `REQUIRED_ENV_VARS` empty, all six optional vars missing), and with vars stubbed (provider + Supabase detection, Supabase needs BOTH URL and anon key, `validateEnv()` never returns a secret value — the only "key" used is the literal fake string `sk-test-only-fake-value`). Phase 3.1.1 removes the old `SUPABASE_URL` / `SUPABASE_ANON_KEY` names from the optional list (8 → 6); Supabase detection now reads the single `NEXT_PUBLIC_` pair. |
+| `src/lib/validation/auth.schema.test.ts` | 9 | Auth validation (Phase 3.1): email / password (min 8) / confirmation rules, sign-in and sign-up form errors, and the `next` open-redirect guard — relative in-app paths allowed, absolute / protocol-relative / `javascript:` / backslash paths fall back to `/`. |
+| `src/lib/supabase/route-guards.test.ts` | 10 | Route-protection decision table (Phase 3.1): `/` and `/app/*` protected, `/auth/sign-in` + `/auth/sign-up` send signed-in users to `/`, callback / forgot / reset always pass through, and everything passes through when Supabase is unconfigured. |
+| `src/lib/supabase/auth-error.test.ts` | 7 | Supabase error mapping (Phase 3.1): wrong credentials, unconfirmed email, already-registered, rate limits, short password, invalid email, expired/invalid links — and unknown errors never surface raw text. |
+| `src/app/api/v1/chat/route.auth.test.ts` | 5 | Chat auth gate (Phase 3.1, mocked Supabase server module): unconfigured → 503 as before; configured + anonymous → 401 `UNAUTHORIZED` (before validation); configured + authenticated → 503; a forged body `user_id` never becomes an identity (401 anonymous, 400 authenticated). |
+| `src/app/auth/callback/route.test.ts` | 5 | Auth callback (Phase 3.1, mocked server client): valid code exchanges and redirects to the validated `next` path, open redirects fall back to `/`, missing code / unconfigured / failed exchange redirect to `/auth/sign-in` with allowlisted `error` values only — no raw error text in the URL. |
+| `src/app/auth/sign-out/route.test.ts` | 3 | Sign-out route (Phase 3.1, mocked server client): server sign-out → 200 `{ signedOut: true }`, unconfigured → no-op 200, sign-out failure → generic 500 without leaking the error. |
+| `src/lib/supabase/secrets.test.ts` | 6 | Secret-leakage grep tests (Phase 3.1): no service-role key in any client-facing file, the browser client reads only the `NEXT_PUBLIC_` Supabase pair, the server client reads only the same single `NEXT_PUBLIC_` pair (Phase 3.1.1 — the old "server never reads `NEXT_PUBLIC_`" rule is gone with the dual-pair design), no `profiles` write path exists anywhere in the app, and `.env.example` keeps the `NEXT_PUBLIC_SUPABASE_*` values empty with no `SERVICE`/`SECRET` in a `NEXT_PUBLIC_` name. |
+| `src/lib/supabase/env-unification.test.ts` | 7 | Env unification (Phase 3.1.1): only the `NEXT_PUBLIC_` pair set → env, server and browser all configured (incl. a `sb_publishable_…` key value); only the old names set → nothing configured (old names are dead); nothing set → nothing configured and no client created; grep tests — no production source file and no `.env.example` line mentions the old names, and the removal is documented in exactly one place (`docs/environment.md`). |
 | `src/lib/ai/registry.test.ts` | 6 | Six candidate models, all `not_configured`, zero available, no "Nexora 1.0" label as a real model, known/unknown model lookup, provider statuses. |
 | `src/lib/ai/gateway.test.ts` | 5 | Unknown model → 400, missing modelId → 400, empty messages → 400, known model → 503 (never a reply), streaming fails eagerly with 503 before any chunk. |
 | `src/lib/api/chat-client.test.ts` | 10 | Client envelope handling with stubbed `fetch`: success passthrough, 503 → typed `ApiClientError` (`PROVIDER_NOT_CONFIGURED`), network failure → `NETWORK_ERROR`, unreadable response → `INVALID_RESPONSE`, `fetchModels`, and the future-only SSE parser (deltas, `done`, `[DONE]`, error event, non-OK response). |
@@ -85,6 +93,11 @@ every phase and its results recorded in the phase report:
 - `GET /api/v1/chat`, `POST /api/v1/models`, `POST /api/v1/health` →
   405 each
 - `GET /` → 200
+- **Auth live checks (Phase 3.1, dummy keys only, deleted afterwards):**
+  with a temporary `.env.local` holding dummy Supabase values, `GET /`
+  → 307 to `/auth/sign-in` (the proxy + redirect chain executes),
+  `GET /auth/sign-in` → 200 (no loop), and `POST /api/v1/chat` (valid,
+  anonymous) → 401 `UNAUTHORIZED`. No real project was involved.
 - No-key-in-frontend check: the SSR homepage HTML and the built
   client chunks under `.next/static` are grepped for `sk-`,
   `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`,
@@ -109,6 +122,15 @@ every phase and its results recorded in the phase report:
   a real `auth.uid()`, GRANT effectiveness, and the CHECKs against
   real rows are all still untested. First live run must be a
   throwaway Supabase project — see `docs/database.md`.
+- **No live Supabase tests.** No project exists, so no test ever signs
+  up, signs in, or refreshes a real session. The suite pins the pure
+  rules (validation, redirect table, error mapping), the route
+  behaviour with a mocked server module, and the secret-leakage
+  invariants. Untested live: real sign-up / sign-in / sign-out flows,
+  session persistence across a browser refresh, cookie refresh in the
+  proxy, the callback code exchange against a real Auth server, and
+  the trigger firing on a real sign-up. First live run must be a
+  throwaway Supabase project — see `docs/auth.md`.
 - **No E2E / browser tests yet.** No Playwright or Cypress. The UI is
   checked by the live homepage request (200 + no secrets in SSR HTML)
   and by manual preview; interaction tests are a later phase.

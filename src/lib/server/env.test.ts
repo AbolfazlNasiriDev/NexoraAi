@@ -15,8 +15,8 @@ const OPTIONAL_VARS = [
   "OPENAI_API_KEY",
   "GEMINI_API_KEY",
   "ANTHROPIC_API_KEY",
-  "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
 ] as const;
 
@@ -92,8 +92,8 @@ describe("env with nothing set", () => {
 describe("env with vars set", () => {
   it("detects a configured provider and Supabase — without ever returning a secret value", async () => {
     stubVar("OPENAI_API_KEY", "sk-test-only-fake-value");
-    stubVar("SUPABASE_URL", "https://example.supabase.co");
-    stubVar("SUPABASE_ANON_KEY", "fake-anon-key-for-tests-only");
+    stubVar("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    stubVar("NEXT_PUBLIC_SUPABASE_ANON_KEY", "fake-anon-key-for-tests-only");
     const mod = await freshEnv();
 
     expect(mod.env.providers.openai.configured).toBe(true);
@@ -114,9 +114,11 @@ describe("env with vars set", () => {
   });
 
   it("Supabase needs BOTH the URL and the anon key", async () => {
-    stubVar("SUPABASE_URL", "https://example.supabase.co");
+    stubVar("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     const mod = await freshEnv();
     expect(mod.isSupabaseConfigured()).toBe(false);
-    expect(mod.validateEnv().missingOptional).toContain("SUPABASE_ANON_KEY");
+    expect(mod.validateEnv().missingOptional).toContain(
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    );
   });
 });

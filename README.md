@@ -352,11 +352,14 @@ app builds and runs with an entirely empty env.
   `REQUIRED_ENV_VARS` (today: none — everything has a default or is
   optional), `OPTIONAL_ENV_VARS`, `validateEnv()` (names only, never
   values), and `isSupabaseConfigured()` (false until both
-  `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set).
+  `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are
+  set).
 - **Secrets stay server-only** — provider keys and the Supabase
   service-role key are read only through `env.ts` and never reach the
-  client; the only `NEXT_PUBLIC_` variables are `NEXT_PUBLIC_APP_NAME`
-  and `NEXT_PUBLIC_APP_URL`.
+  client; the `NEXT_PUBLIC_` variables are `NEXT_PUBLIC_APP_NAME`,
+  `NEXT_PUBLIC_APP_URL`, and the Supabase pair
+  (`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  a publishable key that is public by design).
 - **With nothing set** — providers are `not_configured`, chat answers
   503, and Supabase is not configured.
 

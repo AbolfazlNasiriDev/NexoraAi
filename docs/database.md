@@ -328,7 +328,7 @@ up.
 - No server queries, no repository/data-access layer, no API route
   reads or writes these tables.
 - `.env.example` exists since Phase 2.7 with **empty**
-  `SUPABASE_URL` / `SUPABASE_ANON_KEY` /
+  `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` /
   `SUPABASE_SERVICE_ROLE_KEY` values — no real project or key is
   referenced anywhere.
 - No seed data and no real user data of any kind.

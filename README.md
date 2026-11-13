@@ -199,6 +199,61 @@ loudly with a generic `500` — never a fake reply.
 
 ---
 
+## 🧠 Model Management API (Phase 2.4)
+
+`GET /api/v1/models` lists every model from the shared ModelRegistry
+(`src/lib/ai/registry.ts`) — the single source of truth for which models
+exist. Nothing is hardcoded, added, renamed, or filtered in the route.
+
+Example response (today, with no provider configured):
+
+```json
+{
+  "success": true,
+  "data": {
+    "models": [
+      {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "provider": "openai",
+        "description": "OpenAI's flagship multimodal model — fast, capable general chat.",
+        "capabilities": ["chat", "streaming"],
+        "status": "not_configured"
+      }
+    ],
+    "total": 6,
+    "availableCount": 0
+  }
+}
+```
+
+Each `ModelInfo` has exactly these fields:
+
+| Field | Description |
+| --- | --- |
+| `id` | Stable registry id, e.g. `"gpt-4o"` |
+| `name` | Human-readable name, e.g. `"GPT-4o"` |
+| `provider` | `"openai"` \| `"gemini"` \| `"anthropic"` |
+| `description` | Short description of the model |
+| `capabilities` | Capability tags, e.g. `["chat", "streaming"]` |
+| `status` | See below — derived live from real configuration |
+
+Model statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `available` | The provider has a real connection configured |
+| `not_configured` | No API key (or other real connection) is set up |
+| `disabled` | The model is known but deliberately switched off |
+
+No model is ever reported `available` without a real connection — today
+every model is `not_configured` and `availableCount` is `0`. The Phase 1
+display labels "Nexora 1.0 Pro", "Nexora 1.0" and "Nexora Lite" are UI
+labels only and never appear as models here. No query params are required;
+any sent are ignored. Other methods on this path return `405`.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text

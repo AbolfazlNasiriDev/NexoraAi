@@ -81,3 +81,80 @@ export function hasAnyProviderConfigured(): boolean {
 export function providerEnvVar(provider: ProviderId): string {
   return PROVIDER_ENV_VARS[provider];
 }
+
+// ---------------------------------------------------------------------------
+// Required vs. optional variables (Phase 2.7)
+// ---------------------------------------------------------------------------
+//
+// - REQUIRED: variables with no safe default. Today there are NONE:
+//   `NEXT_PUBLIC_APP_NAME` / `NEXT_PUBLIC_APP_URL` have defaults, and
+//   every provider key and Supabase value is optional — the app must
+//   build and run with an entirely empty env. If a future phase adds a
+//   variable the server cannot run without, add it here AND to the
+//   `REQUIRED_ENV_VARS` list; `validateEnv()` will then report it.
+// - OPTIONAL: everything else. Missing optional vars only disable the
+//   feature they gate (provider → `not_configured`, Supabase →
+//   `isSupabaseConfigured() === false`).
+//
+// Runtime guard: server-only secrets — the three provider API keys and
+// `SUPABASE_SERVICE_ROLE_KEY` — must only ever be read through this
+// module, on the server. Never put a secret in a `NEXT_PUBLIC_`
+// variable, never log it, never return it from an API, and never send
+// it to the client. Only booleans ("is it configured?") leave this
+// module. (`SUPABASE_ANON_KEY` is the one exception by design: it is a
+// publishable key meant for the browser, but it is still read
+// server-side here and only handed to a client when a Supabase client
+// is created in a later phase.)
+
+/** Variables the server cannot run without. Today: none (see above). */
+export const REQUIRED_ENV_VARS: readonly string[] = [];
+
+/** Variables that are safe to leave unset; each gates one feature. */
+export const OPTIONAL_ENV_VARS: readonly string[] = [
+  "OPENAI_API_KEY",
+  "GEMINI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+];
+
+export interface EnvValidation {
+  /** True when every required variable is set (today always true). */
+  ok: boolean;
+  /** Required variables that are missing. Today always empty. */
+  missingRequired: string[];
+  /** Optional variables that are unset — features they gate are off. */
+  missingOptional: string[];
+}
+
+/**
+ * Report which env vars are missing — names only, never values.
+ * Safe to call at startup or from a health-style check; it never
+ * returns, logs, or otherwise exposes a secret value.
+ */
+export function validateEnv(): EnvValidation {
+  const missingRequired = REQUIRED_ENV_VARS.filter(
+    (name) => !hasValue(process.env[name]),
+  );
+  const missingOptional = OPTIONAL_ENV_VARS.filter(
+    (name) => !hasValue(process.env[name]),
+  );
+  return {
+    ok: missingRequired.length === 0,
+    missingRequired,
+    missingOptional,
+  };
+}
+
+/**
+ * True only when Supabase can be used: both the project URL and the
+ * anon key are set. Today always false — no Supabase project exists
+ * yet (Phase 2.6 prepared the schema only).
+ */
+export function isSupabaseConfigured(): boolean {
+  return (
+    hasValue(process.env.SUPABASE_URL) &&
+    hasValue(process.env.SUPABASE_ANON_KEY)
+  );
+}

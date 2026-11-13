@@ -335,6 +335,33 @@ is connected yet**, so nothing here talks to a live database.
 
 ---
 
+## ⚙️ Environment (Phase 2.7)
+
+Environment is template-only — **nothing is configured yet**, and the
+app builds and runs with an entirely empty env.
+
+- **Template** — [`.env.example`](.env.example): all eight variables,
+  every secret value empty. Copy it to start:
+  `cp .env.example .env.local`, then fill in only the keys you have.
+- **Docs** — [`docs/environment.md`](docs/environment.md) has the full
+  table (required/optional, server-only/public, purpose) and the rules.
+- **`.env.local` is gitignored** (`.env`, `.env.local`, `.env.*.local`)
+  and must never be committed; `.env.example` is deliberately *not*
+  ignored so the template stays in the repo.
+- **Validation** — `src/lib/server/env.ts` now exports
+  `REQUIRED_ENV_VARS` (today: none — everything has a default or is
+  optional), `OPTIONAL_ENV_VARS`, `validateEnv()` (names only, never
+  values), and `isSupabaseConfigured()` (false until both
+  `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set).
+- **Secrets stay server-only** — provider keys and the Supabase
+  service-role key are read only through `env.ts` and never reach the
+  client; the only `NEXT_PUBLIC_` variables are `NEXT_PUBLIC_APP_NAME`
+  and `NEXT_PUBLIC_APP_URL`.
+- **With nothing set** — providers are `not_configured`, chat answers
+  503, and Supabase is not configured.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text

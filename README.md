@@ -75,6 +75,44 @@ palette can evolve from a single file.
 
 ---
 
+## 🖥️ Backend (Phase 2.1)
+
+Phase 2.1 adds the backend foundation using Next.js Route Handlers — no
+external services, no API keys required to build or run.
+
+- **API layer** — typed response envelope (`{ success, data }` /
+  `{ success: false, error: { code, message } }`), centralized error
+  handling (`ApiError` + standard codes) and a `withErrorHandling` wrapper
+  for route handlers (`src/lib/server/`)
+- **Environment config** — server-only `src/lib/server/env.ts`; all AI
+  provider keys are optional and absent by default, public values have safe
+  defaults, and secret values are never logged or returned
+- **Health endpoint** — `GET /api/v1/health` returns `200` with the app
+  status and honest provider statuses:
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "ok",
+    "app": "Nexora AI",
+    "version": "2.1.0-phase2.1",
+    "timestamp": "2026-11-13T12:00:00.000Z",
+    "providers": {
+      "openai": "not_configured",
+      "gemini": "not_configured",
+      "anthropic": "not_configured"
+    }
+  }
+}
+```
+
+> No AI provider is configured yet, and no model is claimed available.
+> Chat, models, provider integrations, database and environment files
+> arrive in the later Phase 2 subphases.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text

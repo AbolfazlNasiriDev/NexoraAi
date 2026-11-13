@@ -149,6 +149,56 @@ only, no live provider connections yet.
 
 ---
 
+## 💬 Chat API (Phase 2.3)
+
+`POST /api/v1/chat` sends a chat completion request through the gateway
+(`src/lib/ai/gateway.ts`), which resolves the model in the registry and
+delegates to the matching provider. Input is validated strictly by
+`src/lib/validation/chat.schema.ts` (types in `src/types/chat.ts`,
+which re-uses the shared `AiMessage` type from `src/lib/ai/types.ts`).
+
+Example request:
+
+```json
+{
+  "conversationId": null,
+  "modelId": "gpt-4o",
+  "messages": [{ "role": "user", "content": "Hello Nexora AI" }]
+}
+```
+
+Today no provider is configured, so every valid request answers with the
+standard 503 — never a fabricated reply:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PROVIDER_NOT_CONFIGURED",
+    "message": "AI provider is not configured yet."
+  }
+}
+```
+
+Validation limits (any violation returns `400 VALIDATION_ERROR`):
+
+| Rule | Limit |
+| --- | --- |
+| Body | JSON object, no unknown top-level fields |
+| `conversationId` | `null`, or a non-empty string up to 128 chars (missing means `null`) |
+| `modelId` | Required non-empty string up to 128 chars; unknown ids are rejected |
+| `messages` | Required array of 1–50 messages |
+| Message shape | Exactly `role` + `content`; no unknown fields |
+| `role` | `"user"` \| `"assistant"` \| `"system"` |
+| `content` | String of 1–8000 chars after trimming |
+| Conversation | At least one `"user"` message, and the last message must be `"user"` |
+
+Malformed JSON is also a `400`. Other methods on this path return `405`.
+A provider that is configured but whose `chat()` is still a stub fails
+loudly with a generic `500` — never a fake reply.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text

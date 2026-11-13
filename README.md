@@ -382,6 +382,8 @@ Unit suite + live endpoint checks, no keys and no network needed.
   provider tests (no keys), the SQL migration was never executed
   against a real database, and no E2E browser tests yet.
 
+> **Phase 2 final report:** [`docs/phase-2-report.md`](docs/phase-2-report.md) — architecture, endpoints, provider/database/environment status, test results, known limitations, and the steps to connect a real API later.
+
 ---
 
 ## 🗂️ Project Structure

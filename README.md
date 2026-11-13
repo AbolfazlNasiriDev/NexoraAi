@@ -362,6 +362,28 @@ app builds and runs with an entirely empty env.
 
 ---
 
+## 🧪 Testing (Phase 2.8)
+
+Unit suite + live endpoint checks, no keys and no network needed.
+
+- **Run it** — `npm test` (Vitest 3.2.7, 48 tests), `npm run build`,
+  `npm run lint`. All three must pass.
+- **Covered** — chat validation rules, error factories + envelope,
+  env defaults and `validateEnv()`, registry (6 models, all
+  `not_configured`), gateway 400/503 behaviour, and the browser API
+  client with stubbed `fetch`.
+- **Live checks** — health 200, models 200 (`total: 6`,
+  `availableCount: 0`), chat 503 for valid requests, 400 for every
+  validation case, 405 for wrong methods, homepage 200, plus
+  no-key-in-frontend, no-fake-reply, and no-`dark:` greps.
+- **Docs** — [`docs/testing.md`](docs/testing.md) has the full table,
+  the `server-only` test setup (the package's real `react-server`
+  export condition — not a mock), and the honest limits: no live
+  provider tests (no keys), the SQL migration was never executed
+  against a real database, and no E2E browser tests yet.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text
@@ -405,6 +427,7 @@ nexora-ai/
 │       ├── chat.ts                  # Chat request/response types
 │       └── conversation.ts          # Conversation + UiMessage (2.5)
 ├── package.json
+├── vitest.config.ts             # Vitest config (Phase 2.8)
 └── README.md
 ```
 
@@ -433,6 +456,7 @@ http://localhost:3000
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
 | `npm run lint` | Run ESLint |
+| `npm test` | Run the Vitest unit suite |
 
 ---
 

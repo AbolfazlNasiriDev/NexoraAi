@@ -8,13 +8,14 @@ import { Orb } from "@/components/home/Orb";
 import { PromptInput } from "@/components/home/PromptInput";
 import { FeatureCards } from "@/components/home/FeatureCards";
 import { ChatMessages } from "@/components/home/ChatMessages";
+import { placeholderFor, type FeatureMode, type NavId } from "@/lib/data";
 import {
-  modelOptions,
-  placeholderFor,
-  type ChatMessage,
-  type FeatureMode,
-  type NavId,
-} from "@/lib/data";
+  ApiClientError,
+  isProviderNotConfiguredError,
+  sendChatMessage,
+} from "@/lib/api/chat-client";
+import type { ModelInfo } from "@/types/ai";
+import type { Conversation, UiMessage } from "@/types/conversation";
 import { Badge } from "@/components/ui/badge";
 
 const navToMode: Partial<Record<NavId, FeatureMode>> = {
@@ -22,17 +23,50 @@ const navToMode: Partial<Record<NavId, FeatureMode>> = {
   presentation: "presentation",
 };
 
+function newId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Home workspace (Phase 2.5). Layout, sidebar, orb, hero, composer
+ * placement and feature cards are unchanged from Phase 1 — only the
+ * send flow is wired to the real API:
+ *
+ * send -> user message + "loading" indicator -> POST /api/v1/chat
+ *   -> on success: the REAL assistant reply (unreachable today — no
+ *      provider is configured, so every valid request returns 503)
+ *   -> on error: the "loading" indicator is replaced by a distinct
+ *      system-error message carrying the API error code/message.
+ * Attached files are text-only in 2.5: they are shown on the user
+ * bubble but are NOT sent to the API.
+ */
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeNav, setActiveNav] = useState<NavId>("chat");
-  const [model, setModel] = useState("nexora-pro");
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [conversation, setConversation] = useState<Conversation>({
+    id: null,
+    modelId: "",
+    messages: [],
+  });
   const [mode, setMode] = useState<FeatureMode>("chat");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isSending, setIsSending] = useState(false);
 
+  const messages = conversation.messages;
+  const modelId = conversation.modelId;
   const modelName =
-    modelOptions.find((m) => m.id === model)?.name ?? "Nexora 1.0 Pro";
+    models.find((m) => m.id === modelId)?.name ??
+    (modelId ? modelId : "Loading models…");
   const placeholder = useMemo(() => placeholderFor(mode), [mode]);
   const hasMessages = messages.length > 0;
+
+  const handleModelsLoaded = useCallback((list: ModelInfo[]) => {
+    setModels(list);
+    setConversation((prev) => {
+      if (prev.modelId && list.some((m) => m.id === prev.modelId)) return prev;
+      return { ...prev, modelId: list[0]?.id ?? "" };
+    });
+  }, []);
 
   const handleSelectNav = useCallback((id: NavId) => {
     setActiveNav(id);
@@ -42,25 +76,128 @@ export default function Home() {
   }, []);
 
   const handleNewChat = useCallback(() => {
-    setMessages([]);
+    setConversation((prev) => ({ id: null, modelId: prev.modelId, messages: [] }));
     setMode("chat");
     setActiveNav("chat");
     setSidebarOpen(false);
   }, []);
 
   const handleSend = useCallback(
-    (text: string, file?: { name: string; size: number }) => {
-      const next: ChatMessage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        text: text || (file ? `Attached: ${file.name}` : ""),
-        fileName: file?.name,
-        fileSize: file?.size,
-        model: modelName,
-        createdAt: new Date(),
+    async (text: string, file?: { name: string; size: number }) => {
+      if (isSending) return;
+      const trimmed = text.trim();
+      const userMessage: UiMessage = {
+        id: newId("msg"),
+        kind: "user",
+        content: trimmed || (file ? `Attached: ${file.name}` : ""),
+        ...(file ? { fileName: file.name, fileSize: file.size } : {}),
+        modelName,
+        createdAt: Date.now(),
       };
-      setMessages((prev) => [...prev, next]);
+
+      // Files are not sent to the API in 2.5 (text only): a file with no
+      // text has nothing to send, so say so instead of calling the API.
+      if (!trimmed) {
+        const errorMessage: UiMessage = {
+          id: newId("msg"),
+          kind: "error",
+          content:
+            "Files aren't sent to the API yet — add a text message with your question.",
+          errorCode: "FILE_NOT_SUPPORTED",
+        };
+        setConversation((prev) => ({
+          ...prev,
+          messages: [...prev.messages, userMessage, errorMessage],
+        }));
+        return;
+      }
+
+      if (!modelId) {
+        const errorMessage: UiMessage = {
+          id: newId("msg"),
+          kind: "error",
+          content:
+            "Models are still loading — please wait a moment and try again.",
+          errorCode: "MODELS_LOADING",
+        };
+        setConversation((prev) => ({
+          ...prev,
+          messages: [...prev.messages, userMessage, errorMessage],
+        }));
+        return;
+      }
+
+      const loadingId = newId("msg");
+      const loadingMessage: UiMessage = {
+        id: loadingId,
+        kind: "loading",
+        content: "",
+      };
+      const apiMessages = [...messages, userMessage]
+        .filter((m) => m.kind === "user" || m.kind === "assistant")
+        .map((m) => ({
+          role: (m.kind === "assistant" ? "assistant" : "user") as
+            | "assistant"
+            | "user",
+          content: m.content,
+        }));
+      setConversation((prev) => ({
+        ...prev,
+        messages: [...prev.messages, userMessage, loadingMessage],
+      }));
+      setIsSending(true);
+      try {
+        const data = await sendChatMessage({
+          conversationId: conversation.id,
+          modelId,
+          messages: apiMessages,
+        });
+        // Reachable only once a real provider answers. Today every valid
+        // request returns 503, so this branch never runs with fake data.
+        const assistantMessage: UiMessage = {
+          id: newId("msg"),
+          kind: "assistant",
+          content: data.message.content,
+          modelName: data.modelId,
+          createdAt: Date.now(),
+        };
+        setConversation((prev) => ({
+          ...prev,
+          id: data.conversationId,
+          messages: [
+            ...prev.messages.filter((m) => m.id !== loadingId),
+            assistantMessage,
+          ],
+        }));
+      } catch (error) {
+        const apiError =
+          error instanceof ApiClientError
+            ? error
+            : new ApiClientError(
+                0,
+                "UNKNOWN_ERROR",
+                "Something went wrong. Please try again.",
+              );
+        const errorMessage: UiMessage = {
+          id: newId("msg"),
+          kind: "error",
+          content: isProviderNotConfiguredError(apiError)
+            ? "AI provider is not configured yet."
+            : apiError.message,
+          errorCode: apiError.code,
+        };
+        setConversation((prev) => ({
+          ...prev,
+          messages: [
+            ...prev.messages.filter((m) => m.id !== loadingId),
+            errorMessage,
+          ],
+        }));
+      } finally {
+        setIsSending(false);
+      }
     },
-    [modelName],
+    [conversation, isSending, messages, modelId, modelName],
   );
 
   return (
@@ -75,9 +212,12 @@ export default function Home() {
 
       <div className="flex min-h-screen flex-col lg:pl-[280px]">
         <TopBar
-          model={model}
-          onModelChange={setModel}
+          model={modelId}
+          onModelChange={(id) =>
+            setConversation((prev) => ({ ...prev, modelId: id }))
+          }
           onOpenSidebar={() => setSidebarOpen(true)}
+          onModelsLoaded={handleModelsLoaded}
         />
 
         <main className="flex flex-1 flex-col">
@@ -127,6 +267,7 @@ export default function Home() {
                     placeholder={placeholder}
                     modelName={modelName}
                     onSend={handleSend}
+                    isSending={isSending}
                   />
                 </motion.div>
 
@@ -158,7 +299,7 @@ export default function Home() {
                     </h2>
                     <p className="text-sm text-[#6F6A80]">
                       {modelName} · {messages.length} message
-                      {messages.length === 1 ? "" : "s"} · saved locally
+                      {messages.length === 1 ? "" : "s"} · via /api/v1/chat
                     </p>
                   </div>
                 </div>
@@ -170,6 +311,7 @@ export default function Home() {
                     placeholder={placeholder}
                     modelName={modelName}
                     onSend={handleSend}
+                    isSending={isSending}
                   />
                   <div className="mt-6">
                     <FeatureCards activeMode={mode} onSelect={setMode} />
@@ -181,8 +323,8 @@ export default function Home() {
         </main>
 
         <footer className="border-t border-[#EAE5F3]/70 px-6 py-4 text-center text-[11px] text-[#6F6A80]">
-          Nexora AI · Phase 1 — frontend only. No data leaves your browser
-          yet.
+          Nexora AI · Phase 2 — messages go through /api/v1/chat. The AI
+          provider is not configured yet, so nothing is answered.
         </footer>
       </div>
     </div>

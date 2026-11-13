@@ -2,6 +2,7 @@
 
 import { Menu, Download, SlidersHorizontal } from "lucide-react";
 import { ModelSelector } from "@/components/home/ModelSelector";
+import type { ModelInfo } from "@/types/ai";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -9,9 +10,11 @@ interface TopBarProps {
   model: string;
   onModelChange: (id: string) => void;
   onOpenSidebar: () => void;
+  /** Called once the ModelSelector has loaded the real model list. */
+  onModelsLoaded?: (models: ModelInfo[]) => void;
 }
 
-export function TopBar({ model, onModelChange, onOpenSidebar }: TopBarProps) {
+export function TopBar({ model, onModelChange, onOpenSidebar, onModelsLoaded }: TopBarProps) {
   return (
     <header className="glass sticky top-0 z-20 border-b border-[#EAE5F3]/80">
       <div className="flex items-center gap-2 px-4 py-3 sm:gap-3 sm:px-6">
@@ -23,10 +26,14 @@ export function TopBar({ model, onModelChange, onOpenSidebar }: TopBarProps) {
           <Menu className="h-5 w-5" />
         </button>
 
-        <ModelSelector value={model} onChange={onModelChange} />
+        <ModelSelector
+          value={model}
+          onChange={onModelChange}
+          onModelsLoaded={onModelsLoaded}
+        />
 
         <Badge variant="lavender" className="hidden md:inline-flex">
-          Phase 1 · Frontend
+          Phase 2 · API
         </Badge>
 
         <div className="ml-auto flex items-center gap-2">

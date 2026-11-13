@@ -2,26 +2,81 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Feather, Sparkles, Zap } from "lucide-react";
-import { modelOptions } from "@/lib/data";
+import {
+  Check,
+  ChevronDown,
+  Feather,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import { fetchModels } from "@/lib/api/chat-client";
+import type { ModelInfo, ProviderId } from "@/types/ai";
 import { cn } from "@/lib/utils";
 
-const modelIcons: Record<string, typeof Sparkles> = {
-  "nexora-pro": Sparkles,
-  "nexora-1": Zap,
-  "nexora-lite": Feather,
+const providerIcons: Record<ProviderId, typeof Sparkles> = {
+  openai: Sparkles,
+  gemini: Zap,
+  anthropic: Feather,
 };
+
+const providerLabels: Record<ProviderId, string> = {
+  openai: "OpenAI",
+  gemini: "Google Gemini",
+  anthropic: "Anthropic Claude",
+};
+
+type LoadState = "loading" | "ready" | "error";
 
 interface ModelSelectorProps {
   value: string;
   onChange: (id: string) => void;
+  /** Called once the real model list has loaded (also on retry). */
+  onModelsLoaded?: (models: ModelInfo[]) => void;
 }
 
-export function ModelSelector({ value, onChange }: ModelSelectorProps) {
+/**
+ * Model selector, wired to the real `GET /api/v1/models` (Phase 2.5).
+ *
+ * The Phase 1 display models ("Nexora 1.0 Pro" / "Nexora 1.0" /
+ * "Nexora Lite") were UI labels only and are gone: the dropdown lists
+ * only the registry models returned by the API, each with its live
+ * status. While loading, the button is disabled; on failure it offers a
+ * retry and never falls back to a fake list.
+ */
+export function ModelSelector({ value, onChange, onModelsLoaded }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [retryTick, setRetryTick] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
-  const selected = modelOptions.find((m) => m.id === value) ?? modelOptions[0];
-  const SelectedIcon = modelIcons[selected.id] ?? Sparkles;
+  const selected = models.find((m) => m.id === value);
+  const SelectedIcon = selected ? providerIcons[selected.provider] : Sparkles;
+
+  // Fetch the real model list on mount (and on retry). State updates happen
+  // only inside the promise callbacks, never synchronously in the effect.
+  useEffect(() => {
+    let cancelled = false;
+    fetchModels()
+      .then((list) => {
+        if (cancelled) return;
+        setModels(list);
+        setLoadState("ready");
+        onModelsLoaded?.(list);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [onModelsLoaded, retryTick]);
+
+  const retry = () => {
+    setLoadState("loading");
+    setRetryTick((tick) => tick + 1);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -39,6 +94,39 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
     };
   }, [open ]);
 
+  if (loadState === "loading") {
+    return (
+      <button
+        disabled
+        aria-label="Loading models"
+        className="flex cursor-wait items-center gap-2 rounded-2xl border border-[#EAE5F3] bg-white/80 px-3 py-2 text-sm font-semibold text-[#6F6A80] shadow-soft"
+      >
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EDE5FC] text-[#8054D9]">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </span>
+        <span className="hidden sm:inline">Loading models…</span>
+        <span className="sm:hidden">Nexora</span>
+      </button>
+    );
+  }
+
+  if (loadState === "error") {
+    return (
+      <button
+        onClick={retry}
+        aria-label="Couldn't load models — retry"
+        title="Couldn't load models — click to retry"
+        className="flex cursor-pointer items-center gap-2 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-sm font-semibold text-[#B91C1C] shadow-soft transition-colors hover:bg-[#FEE2E2]"
+      >
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#FEE2E2] text-[#B91C1C]">
+          <RotateCcw className="h-4 w-4" />
+        </span>
+        <span className="hidden sm:inline">Couldn&apos;t load models</span>
+        <span className="sm:hidden">Retry</span>
+      </button>
+    );
+  }
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -55,7 +143,9 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#EDE5FC] text-[#8054D9]">
           <SelectedIcon className="h-4 w-4" />
         </span>
-        <span className="hidden text-[#242033] sm:inline">{selected.name}</span>
+        <span className="hidden text-[#242033] sm:inline">
+          {selected?.name ?? "Choose a model"}
+        </span>
         <span className="text-[#242033] sm:hidden">Nexora</span>
         <ChevronDown
           className={cn("h-4 w-4 text-[#6F6A80] transition-transform duration-200", open && "rotate-180")}
@@ -75,8 +165,8 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
             <li className="px-3 pt-2 pb-1 text-[10px] font-bold tracking-[0.14em] text-[#6F6A80]/80 uppercase">
               Choose a model
             </li>
-            {modelOptions.map((model) => {
-              const Icon = modelIcons[model.id] ?? Sparkles;
+            {models.map((model) => {
+              const Icon = providerIcons[model.provider];
               const active = model.id === value;
               return (
                 <li key={model.id}>
@@ -101,16 +191,26 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2 text-sm font-semibold text-[#242033]">
+                      <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#242033]">
                         {model.name}
-                        {model.badge && (
-                          <span className="rounded-full bg-[#8054D9] px-2 py-0.5 text-[9px] font-bold tracking-wide text-white uppercase">
-                            {model.badge}
+                        {model.status === "not_configured" && (
+                          <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[9px] font-bold tracking-wide text-[#92400E] uppercase">
+                            Not configured
+                          </span>
+                        )}
+                        {model.status === "available" && (
+                          <span className="rounded-full bg-[#DCFCE7] px-2 py-0.5 text-[9px] font-bold tracking-wide text-[#166534] uppercase">
+                            Available
+                          </span>
+                        )}
+                        {model.status === "disabled" && (
+                          <span className="rounded-full bg-[#F1F5F9] px-2 py-0.5 text-[9px] font-bold tracking-wide text-[#475569] uppercase">
+                            Disabled
                           </span>
                         )}
                       </span>
                       <span className="block text-xs leading-relaxed text-[#6F6A80]">
-                        {model.tagline}
+                        {providerLabels[model.provider]} · {model.description}
                       </span>
                     </span>
                     {active && <Check className="mt-1 h-4 w-4 shrink-0 text-[#8054D9]" />}
@@ -119,7 +219,8 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
               );
             })}
             <li className="border-t border-[#EAE5F3] px-3 py-2 text-[11px] leading-relaxed text-[#6F6A80]">
-              Model choice is saved locally in this Phase 1 preview.
+              Models load live from /api/v1/models — statuses reflect real
+              configuration. No provider is configured yet.
             </li>
           </motion.ul>
         )}

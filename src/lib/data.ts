@@ -72,34 +72,16 @@ export const navSections: NavSection[] = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* Models (local UI state only — no backend in Phase 1)                */
+/* Models — REMOVED in Phase 2.5                                       */
 /* ------------------------------------------------------------------ */
 
-export interface ModelOption {
-  id: string;
-  name: string;
-  tagline: string;
-  badge?: string;
-}
-
-export const modelOptions: ModelOption[] = [
-  {
-    id: "nexora-pro",
-    name: "Nexora 1.0 Pro",
-    tagline: "Most capable — reasoning, code & long context",
-    badge: "Recommended",
-  },
-  {
-    id: "nexora-1",
-    name: "Nexora 1.0",
-    tagline: "Balanced speed and quality for everyday work",
-  },
-  {
-    id: "nexora-lite",
-    name: "Nexora Lite",
-    tagline: "Fast and light for quick questions",
-  },
-];
+/**
+ * The Phase 1 display models ("Nexora 1.0 Pro", "Nexora 1.0",
+ * "Nexora Lite") were UI labels only, not real AI models. They were
+ * removed in Phase 2.5: the ModelSelector now loads the real registry
+ * models from `GET /api/v1/models` instead. Nothing in `src/` should
+ * offer them as selectable models anymore.
+ */
 
 /* ------------------------------------------------------------------ */
 /* Feature cards                                                       */
@@ -160,17 +142,4 @@ export const defaultPlaceholder =
 export function placeholderFor(mode: FeatureMode): string {
   if (mode === "chat") return defaultPlaceholder;
   return featureCards.find((c) => c.id === mode)?.placeholder ?? defaultPlaceholder;
-}
-
-/* ------------------------------------------------------------------ */
-/* Chat (local only)                                                   */
-/* ------------------------------------------------------------------ */
-
-export interface ChatMessage {
-  id: string;
-  text: string;
-  fileName?: string;
-  fileSize?: number;
-  model: string;
-  createdAt: Date;
 }

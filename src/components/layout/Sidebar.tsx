@@ -143,7 +143,7 @@ export function Sidebar({ open, onClose, activeNav, onSelectNav, onNewChat }: Si
                 <p className="text-sm font-bold text-[#242033]">Upgrade to Premium</p>
               </div>
               <p className="mt-2 text-xs leading-relaxed text-[#6F6A80]">
-                Unlock Nexora 1.0 Pro, unlimited images and priority speed.
+                Unlock Nexora Pro, unlimited images and priority speed.
               </p>
               <Button size="sm" className="mt-3 w-full font-semibold">
                 Go Premium

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import {
   FileText,
+  Loader2,
   MoreHorizontal,
   Paperclip,
   SendHorizontal,
@@ -26,14 +27,21 @@ interface PromptInputProps {
   modelName: string;
   onSend: (text: string, file?: AttachedFile) => void;
   autoFocus?: boolean;
+  /** True while a message is being sent to the API — disables input. */
+  isSending?: boolean;
 }
 
 /**
  * The main prompt composer. Files are only read locally to show a chip
- * (name + size) — nothing is uploaded to any server in Phase 1.
+ * (name + size) — they are NOT sent to the API in Phase 2.5 (text only).
  * Enter sends, Shift+Enter adds a new line.
  */
-export function PromptInput({ placeholder, modelName, onSend }: PromptInputProps) {
+export function PromptInput({
+  placeholder,
+  modelName,
+  onSend,
+  isSending = false,
+}: PromptInputProps) {
   const [value, setValue] = useState("");
   const [file, setFile] = useState<AttachedFile | null>(null);
   const [tone, setTone] = useState<Tone>("Precise");
@@ -41,7 +49,7 @@ export function PromptInput({ placeholder, modelName, onSend }: PromptInputProps
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const canSend = value.trim().length > 0 || file !== null;
+  const canSend = !isSending && (value.trim().length > 0 || file !== null);
 
   const resize = () => {
     const el = textareaRef.current;
@@ -87,6 +95,7 @@ export function PromptInput({ placeholder, modelName, onSend }: PromptInputProps
           ref={textareaRef}
           value={value}
           rows={1}
+          disabled={isSending}
           onChange={(e) => {
             setValue(e.target.value);
             resize();
@@ -99,7 +108,7 @@ export function PromptInput({ placeholder, modelName, onSend }: PromptInputProps
           }}
           placeholder={placeholder}
           aria-label="Message Nexora"
-          className="max-h-[200px] w-full resize-none bg-transparent px-2 pt-1 text-[15px] leading-relaxed text-[#242033] placeholder:text-[#6F6A80]/70"
+          className="max-h-[200px] w-full resize-none bg-transparent px-2 pt-1 text-[15px] leading-relaxed text-[#242033] placeholder:text-[#6F6A80]/70 disabled:opacity-60"
         />
 
         {/* Tone options */}
@@ -181,11 +190,15 @@ export function PromptInput({ placeholder, modelName, onSend }: PromptInputProps
             <Button
               onClick={send}
               disabled={!canSend}
-              aria-label="Send message"
+              aria-label={isSending ? "Sending message" : "Send message"}
               size="icon"
               className="h-11 w-11 rounded-full shadow-[0_10px_24px_rgb(128_84_217/0.4)] disabled:from-[#B69AEF] disabled:to-[#B69AEF] disabled:shadow-none"
             >
-              <SendHorizontal className="h-5 w-5" />
+              {isSending ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <SendHorizontal className="h-5 w-5" />
+              )}
             </Button>
           </div>
         </div>
@@ -193,7 +206,8 @@ export function PromptInput({ placeholder, modelName, onSend }: PromptInputProps
 
       <p className="mt-3 text-center text-[11px] leading-relaxed text-[#6F6A80]">
         Nexora can make mistakes in Phase 2 — always double-check important
-        answers. Your files stay on this device in Phase 1.
+        answers. Your files stay on this device — they aren&apos;t sent to
+        the API yet.
       </p>
     </div>
   );

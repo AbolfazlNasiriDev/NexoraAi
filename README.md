@@ -60,12 +60,15 @@ palette can evolve from a single file.
   Upgrade to Premium card
 - 🔮 **Floating glowing orb** — animated with Framer Motion, layered radial
   gradients, a rotating conic ring and drifting sparkles
-- 💬 **Real local chat** — send a message and it appears as a bubble;
-  the UI is honest that the AI backend arrives in Phase 2
+- 💬 **Chat wired to the API** — sending a message calls
+  `POST /api/v1/chat` and shows the result in the thread; with no
+  provider configured yet, the API's 503 error is shown as a distinct
+  system message — never a fabricated reply
 - 📎 **File attach** — pick a file and see a removable chip with its name
   and size; nothing is uploaded anywhere
-- 🎛️ **Model selector** — Nexora 1.0 Pro / Nexora 1.0 / Nexora Lite,
-  stored as local UI state
+- 🎛️ **Model selector** — loads the real registry models from
+  `GET /api/v1/models`, each with a live status badge (`Not configured`
+  today); the old display labels are gone
 - 🃏 **Feature cards** — Image Generator, AI Presentation and Dev Assistant;
   selecting one changes the prompt placeholder and highlights the card
 - 🎬 **Motion everywhere** — page transitions, hover lifts, floating orb,
@@ -254,6 +257,56 @@ any sent are ignored. Other methods on this path return `405`.
 
 ---
 
+## 🔌 Frontend Integration (Phase 2.5)
+
+Phase 2.5 wires the existing dashboard to the real API — same sidebar,
+orb, hero, composer placement, feature cards and light theme; only the
+send flow and the model list changed.
+
+- **Chat API client** — `src/lib/api/chat-client.ts` (client-safe, no
+  secrets): `sendChatMessage()` posts to `POST /api/v1/chat` and
+  `fetchModels()` loads `GET /api/v1/models`, both parsing the standard
+  envelope and throwing a typed `ApiClientError` (`status`, `code`,
+  `message`) on failure. `isProviderNotConfiguredError()` detects the
+  standard 503.
+- **Conversation types** — `src/types/conversation.ts`: `Conversation`
+  (`id`, `modelId`, `messages`) and `UiMessage` with kinds `"user"` |
+  `"assistant"` | `"error"` | `"loading"`. `"error"` is a distinct system
+  message, never an assistant reply; `"assistant"` exists only for real
+  future provider replies.
+- **Send flow** — `src/app/page.tsx` holds the `Conversation` and
+  `isSending` state. On send it adds the user message, shows a
+  "Nexora is thinking…" loading indicator, calls the API, then replaces
+  the indicator with the real reply — or, on failure, with the distinct
+  error bubble carrying the API error code and message. While sending,
+  the composer is disabled and the send button spins.
+- **Model selector** — `src/components/home/ModelSelector.tsx` fetches
+  the real model list on mount. States: loading (disabled,
+  "Loading models…"), error ("Couldn't load models" + retry, never a
+  fake fallback list), loaded (dropdown with name, provider and a live
+  status badge; the first model is selected by default). The Phase 1
+  display models are gone from the selector entirely.
+- **Message states** — `src/components/home/ChatMessages.tsx` renders
+  each kind distinctly: user bubbles as before, assistant replies from
+  real API output only, loading dots, and a rose-tinted error bubble
+  (AlertTriangle, error code chip, "Your message was kept — nothing was
+  answered.").
+- **Streaming, prepared** — `parseSseStream()` in the chat client reads
+  a future `text/event-stream` response into `onDelta` / `onDone` /
+  `onError` callbacks. No streaming endpoint exists yet, so the UI does
+  not call it and it never fabricates chunks.
+- **Files stay local** — attached files are shown as a chip on the user
+  bubble but are not sent to the API in 2.5 (text only); a file with no
+  text gets an explanatory error instead of a call.
+
+> Sending a message today returns the honest 503
+> ("AI provider is not configured yet."), shown in the thread as a
+> provider-not-configured error — never a fake reply. Database, history
+> persistence and environment files arrive in the later Phase 2
+> subphases.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text
@@ -261,6 +314,10 @@ nexora-ai/
 ├── public/                          # Static assets
 ├── src/
 │   ├── app/
+│   │   ├── api/v1/
+│   │   │   ├── chat/route.ts        # POST /api/v1/chat (Phase 2.3)
+│   │   │   ├── health/route.ts      # GET /api/v1/health (Phase 2.1)
+│   │   │   └── models/route.ts      # GET /api/v1/models (Phase 2.4)
 │   │   ├── layout.tsx               # Root layout, metadata, fonts
 │   │   ├── page.tsx                 # Home workspace (client, holds state)
 │   │   └── globals.css              # Tailwind v4 theme + Nexora tokens
@@ -270,17 +327,28 @@ nexora-ai/
 │   │   │   └── TopBar.tsx           # Model selector, Config, Export
 │   │   ├── home/
 │   │   │   ├── Orb.tsx              # Floating glowing orb
-│   │   │   ├── ModelSelector.tsx    # Model dropdown
+│   │   │   ├── ModelSelector.tsx    # Model dropdown (real API, Phase 2.5)
 │   │   │   ├── PromptInput.tsx      # Composer, attach, tone, send
 │   │   │   ├── FeatureCards.tsx     # Image / Presentation / Dev cards
-│   │   │   └── ChatMessages.tsx     # Local message transcript
+│   │   │   └── ChatMessages.tsx     # Thread: user / loading / error / reply
 │   │   └── ui/
 │   │       ├── button.tsx           # shadcn-style Button
 │   │       ├── badge.tsx            # shadcn-style Badge
 │   │       └── input.tsx            # shadcn-style Input
-│   └── lib/
-│       ├── data.ts                  # Nav, models, features, chat types
-│       └── utils.ts                 # cn() + file-size helper
+│   ├── lib/
+│   │   ├── api/
+│   │   │   └── chat-client.ts       # Chat API client + SSE prep (2.5)
+│   │   ├── ai/                      # Provider interface, registry, gateway
+│   │   ├── server/                  # env, errors, response envelope
+│   │   ├── validation/
+│   │   │   └── chat.schema.ts       # Chat request validation (2.3)
+│   │   ├── data.ts                  # Nav, features, placeholders
+│   │   └── utils.ts                 # cn() + file-size helper
+│   └── types/
+│       ├── ai.ts                    # ModelInfo, ModelStatus, ProviderId
+│       ├── api.ts                   # API envelope + error codes
+│       ├── chat.ts                  # Chat request/response types
+│       └── conversation.ts          # Conversation + UiMessage (2.5)
 ├── package.json
 └── README.md
 ```

@@ -307,6 +307,34 @@ send flow and the model list changed.
 
 ---
 
+## 🗄️ Database (Phase 2.6)
+
+The database architecture is ready as a schema — **no Supabase project
+is connected yet**, so nothing here talks to a live database.
+
+- **Migration** — `supabase/migrations/20261113000000_nexora_phase2_init.sql`
+  (Supabase PostgreSQL 15+, safely re-runnable, creates zero rows).
+  Five tables: `profiles` (one row per auth user, `id` = `auth.users.id`),
+  `conversations` (`user_id`, `title`, `model_id`), `messages`
+  (append-only, `role` ∈ `user` / `assistant` / `system`), `user_settings`
+  (one row per user, `theme` is light-only by a CHECK constraint), and
+  `usage_records` (append-only, per-reply token accounting).
+- **Row types** — `src/types/database.ts` mirrors every table 1:1
+  (`ProfileRow`, `ConversationRow`, `MessageRow`, `UserSettingsRow`,
+  `UsageRecordRow`); types only, no client, no connection.
+- **Docs** — `docs/database.md` has the ERD, the reason for every
+  index, and the full RLS model.
+- **Row Level Security** — enabled on all five tables; every policy is
+  scoped to `auth.uid()`, so users only touch their own rows.
+  `usage_records` is read-only for end users — writes happen server-side
+  with the service-role key, which stays server-only and never reaches
+  the browser.
+- **Applying it later** — once a Supabase project exists: paste the file
+  into the Supabase SQL Editor, or run `supabase db push`. No auth flow,
+  client, or server query code exists yet — that comes in later phases.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text

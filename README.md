@@ -113,6 +113,42 @@ external services, no API keys required to build or run.
 
 ---
 
+## 🤖 AI Providers (Phase 2.2)
+
+Phase 2.2 adds the multi-provider architecture — interfaces and structure
+only, no live provider connections yet.
+
+- **Shared contract** — `AIProvider` (`src/lib/ai/provider.ts`): `id`,
+  `displayName`, `isConfigured()`, `getModels()`, `chat()`,
+  `chatStream()` and `identifyModel()`. Every provider implements this
+  interface, so the gateway never talks to a provider directly.
+- **Future providers** — thin classes in `src/lib/ai/providers/` for
+  OpenAI, Google Gemini and Anthropic Claude, sharing the plumbing in
+  `BaseProvider` (config check, live status derivation, rate-limit error
+  mapping). No SDK is installed and no API key exists.
+- **Model registry** — `src/lib/ai/registry.ts` is the single source of
+  truth for models: `listModels()`, `getModel()`,
+  `getProviderForModel()`, `listAvailableModels()` and
+  `getProviderStatus()`. Every model's status is derived live from real
+  configuration — a key present means `available`, otherwise
+  `not_configured`.
+- **Gateway** — `src/lib/ai/gateway.ts` is the single entry point for
+  later phases: it resolves the model through the registry, rejects
+  unknown model ids with a 400, and returns the standard 503
+  ("AI provider is not configured yet.") when the provider has no key.
+- **Types** — provider-neutral chat types in `src/lib/ai/types.ts`
+  (`AiMessage`, `ChatCompletionRequest/Response`, `StreamChunk`) and
+  shared model types in `src/types/ai.ts` (`ModelInfo`, `ModelStatus`,
+  `ProviderId`).
+
+> No provider is configured and **no model is available yet** —
+> `listAvailableModels()` correctly returns `[]`. The Phase 1 display
+> labels "Nexora 1.0 Pro", "Nexora 1.0" and "Nexora Lite" are UI labels
+> only and are not listed as real AI models anywhere. Sending a chat
+> request today returns the honest 503 instead of a fabricated reply.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text
